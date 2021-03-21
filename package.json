@@ -1,0 +1,20 @@
+{
+  "name": "elm-particle-system",
+  "version": "V1.0.0",
+  "description": "desc",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "dev": "parcel ./index.html",
+    "build": "parcel build ./index.html"
+  },
+  "devDependencies": {
+    "elm": "^0.19.1-5",
+    "elm-hot": "^1.1.6",
+    "node-elm-compiler": "^5.0.5"
+  },
+  "dependencies": {
+    "elm-canvas": "^2.2.4",
+    "parcel": "1.12.3"
+  }
+}
