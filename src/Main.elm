@@ -2,14 +2,14 @@ module Main exposing (main)
 
 import Browser exposing (Document)
 import Browser.Events exposing (onAnimationFrameDelta)
-import Canvas exposing (Renderable, Shape, circle, shapes, toHtml)
+import Canvas exposing (Renderable, Shape, circle, rect, shapes, toHtml)
 import Canvas.Settings exposing (fill)
 import Color exposing (Color, fromRgba)
 import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
 import Json.Decode as Decode exposing (Decoder, array, decodeString, errorToString, field, float, int, list, map, map3, string)
 import Json.Decode.Pipeline exposing (hardcoded, optional, required)
-import List exposing (foldr, head, length)
+import List exposing (foldr, head, length, reverse)
 import Loop
 import PseudoRandom exposing (floatSequence)
 import Random exposing (Seed, float)
@@ -124,12 +124,13 @@ generateRandomNum : Seed -> Float -> Float
 generateRandomNum seed angle =
     Random.step (Random.float -1 1) seed
         |> Tuple.first
+        |> Debug.log "newParticle"
         |> (\v -> v * angle)
 
 
 tupleSeedEmitter : Seed -> Emitter -> ( Seed, List Particle ) -> ( Seed, List Particle )
 tupleSeedEmitter seed emitter tuple =
-    ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter (Random.initialSeed (length (Tuple.second tuple))) emitter :: Tuple.second tuple )
+    ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter seed emitter :: Tuple.second tuple)
 
 
 groupParticlesFromEmitter : Seed -> Emitter -> List Particle
@@ -140,7 +141,7 @@ groupParticlesFromEmitter seed emitter =
 createParticleFromEmitter : Seed -> Emitter -> Particle
 createParticleFromEmitter seed emitter =
     { position = emitter.position
-    , velocity = rotateVector (generateRandomNum seed emitter.spread) emitter.velocity
+    , velocity = rotateVector (degrees (generateRandomNum seed emitter.spread)) emitter.velocity
 
     --, velocity = rotateVector emitter.spread emitter.velocity
     , acceleration = { x = 0, y = 0, z = 0 }
@@ -228,8 +229,10 @@ update msg model =
                 newParticles =
                     addParticlesFromEmitters m.data.emitters
                         ++ m.data.particles
+                        -- limitamos las particulas (luego eliminaremos las que se queden fuera de la vista)
+                        |> limitParticles 1000
                         -- movemos las particulas
-                        |> map moveParticle
+                        |> List.map moveParticle
 
                 newEmitters : List Emitter
                 newEmitters =
@@ -274,21 +277,16 @@ view model =
     , body =
         [ toHtml ( width, height )
             []
-            (modelToShape model)
-
-        {--
-            ++ [ shapes
-                    [ fill Color.darkBlue ]
-                    [ circle ( 20, 20 ) 5 ]
-               , shapes
-                    [ fill Color.darkBlue ]
-                    [ circle ( 80, 120 ) 25 ]
-               ]
-               --}
+            (shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
+               :: modelToShape model
+            )
         , div [] [ text "this is it" ]
         ]
     }
 
+limitParticles: Int -> List Particle -> List Particle
+limitParticles num list =
+    List.take num list
 
 modelToShape : Model -> List Renderable
 modelToShape model =
@@ -300,12 +298,17 @@ modelToShape model =
             [ shapes [] [] ]
 
         Success m ->
-            fieldShapes m.data.fields
+            fieldShapes m.data.fields ++ particleShapes m.data.particles
 
 
-convertToCircle : Field -> Shape
-convertToCircle field =
+convertToCircleField : Field -> Shape
+convertToCircleField field =
     circle ( field.position.x, field.position.y ) ((field.size |> toFloat) / 2)
+
+convertToCircleParticle : Particle -> Shape
+convertToCircleParticle particle =
+    circle ( particle.position.x, particle.position.y ) ((particle.size |> toFloat) / 2)
+
 
 
 defaultColor : Rgba
@@ -324,21 +327,14 @@ convertFieldToShapes field =
                 )
             )
         ]
-        [ convertToCircle field ]
+        [ convertToCircleField field ]
 
 
 convertParticleToShapes : Particle -> Renderable
 convertParticleToShapes particle =
     shapes
-        [ fill
-            (Color.fromRgba
-                (particle.color
-                    |> head
-                    |> Maybe.withDefault defaultColor
-                )
-            )
-        ]
-        [ convertToCircle particle ]
+        [ fill (Color.fromRgba particle.color)]
+        [ convertToCircleParticle particle ]
 
 
 fieldShapes : List Field -> List Renderable
