@@ -18,7 +18,8 @@
             "elm/time": "1.0.0",
             "elm-community/maybe-extra": "5.2.0",
             "joakin/elm-canvas": "4.2.1",
-            "jxxcarlson/elm-pseudorandom": "1.0.3"
+            "jxxcarlson/elm-pseudorandom": "1.0.3",
+            "pilatch/flip": "1.0.0"
         },
         "indirect": {
             "elm/bytes": "1.0.8",

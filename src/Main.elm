@@ -5,11 +5,13 @@ import Browser.Events exposing (onAnimationFrameDelta)
 import Canvas exposing (Renderable, Shape, circle, rect, shapes, toHtml)
 import Canvas.Settings exposing (fill)
 import Color exposing (Color, fromRgba)
+import Dict
+import Flip exposing (flip)
 import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
 import Json.Decode as Decode exposing (Decoder, array, decodeString, errorToString, field, float, int, list, map, map3, string)
 import Json.Decode.Pipeline exposing (hardcoded, optional, required)
-import List exposing (foldr, head, length, reverse)
+import List exposing (concat, foldr, head, length, reverse)
 import Loop
 import PseudoRandom exposing (floatSequence)
 import Random exposing (Seed, float)
@@ -188,11 +190,39 @@ updateAcceleration fields particle =
         disturbanceAccelerationFactor f p  =
             (toFloat f.size * toFloat p.size ) / (dist (repelVector f p))^2
 
-        accelerationVector: Field -> Particle -> Float -> Point
-        accelerationVector field part disturbance =
-            repelVector field part |> x = 10
+        vectorMultiplyBy: Point -> Float -> Point
+        vectorMultiplyBy p k =
+           {x = p.x * k, y=p.y * k , z= p.z * k}
+
+        {--
+        internalRecord field refParticle =
+            { originalVector =  repelVector field refParticle
+            , distance = dist (repelVector field refParticle)
+            , perturbance =  disturbanceAccelerationFactor field refParticle
+            , acceleration = vectorMultiplyBy (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
+            }
+        --}
+
+        acc refParticle field = vectorMultiplyBy (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
+
+        addVector : Point -> Point -> Point
+        addVector a b =
+          {x = a.x + b.x, y = a.y + b.y, z = a.z + b.z}
+
+        negative: Point -> Point
+        negative p =
+            {x = p.x * -4, y = p.y * -4, z = p.z * -4}
     in
-    particle
+
+        {particle | acceleration = negative (List.foldl addVector {x = 0, y = 0, z = 0} (List.map ( acc particle ) fields))}
+
+
+        -- vectorMultiplyBy repelVect (disturbanceAccelerationFactor fieldItem particle)
+
+
+
+
+
 -- UPDATE
 
 
@@ -239,7 +269,7 @@ update msg model =
 
                 moveParticle : Particle -> Particle
                 moveParticle particle =
-                    { particle | position = addVector particle.position particle.velocity }
+                    { particle | position = addVector particle.acceleration(addVector particle.position particle.velocity) }
 
                 -- NEW DATA BEEN ADDED TO DATA FIELD
                 newParticles : List Particle
