@@ -147,7 +147,7 @@ createParticleFromEmitter seed emitter =
     , acceleration = { x = 0, y = 0, z = 0 }
     , color = { red = 1, green = 0.5, blue = 0.25, alpha = 1 }
     , size = 1
-    , gravity = 0
+    , gravity = 0 -- TODO: remove gravity from particle
     }
 
 
@@ -174,8 +174,25 @@ emitterIdentity =
     , density = 1
     }
 
+updateAcceleration: List Field -> Particle -> Particle
+updateAcceleration fields particle =
+    let
+        repelVector: Field -> Particle -> Point
+        repelVector f p = {x = f.position.x - p.position.x, y = f.position.y - p.position.y, z = f.position.z - p.position.z }
 
+        dist: Point -> Float
+        dist p = sqrt (p.x^2 + p.y^2)
 
+        -- 3ª ley de newton F = (m * m') / d^2
+        disturbanceAccelerationFactor: Field -> Particle -> Float
+        disturbanceAccelerationFactor f p  =
+            (toFloat f.size * toFloat p.size ) / (dist (repelVector f p))^2
+
+        accelerationVector: Field -> Particle -> Float -> Point
+        accelerationVector field part disturbance =
+            repelVector field part |> x = 10
+    in
+    particle
 -- UPDATE
 
 
@@ -232,7 +249,7 @@ update msg model =
                         -- limitamos las particulas (luego eliminaremos las que se queden fuera de la vista)
                         |> limitParticles 1000
                         -- movemos las particulas
-                        |> List.map moveParticle
+                        |> List.map ((updateAcceleration m.data.fields) >> moveParticle)
 
                 newEmitters : List Emitter
                 newEmitters =
