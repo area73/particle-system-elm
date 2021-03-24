@@ -15,7 +15,8 @@ import List exposing (concat, foldr, head, length, reverse)
 import Loop
 import PseudoRandom exposing (floatSequence)
 import Random exposing (Seed, float)
-import TypeDefinitions exposing (Emitter, Field, Particle, Point, Rgba, rgba)
+import TypeDefinitions exposing (Emitter, Field, Particle, Rgba, rgba)
+import Vector exposing (Vector, add)
 
 
 
@@ -59,9 +60,9 @@ type Msg
 -- INIT
 
 
-point : Decoder Point
+point : Decoder Vector
 point =
-    map3 Point
+    map3 Vector
         (field "x" Decode.float)
         (field "y" Decode.float)
         (field "z" Decode.float)
@@ -101,12 +102,12 @@ addAngle delta ( r, ang ) =
     ( r, ang + delta )
 
 
-toPoint : ( Float, Float ) -> Point
+toPoint : ( Float, Float ) -> Vector
 toPoint ( x, y ) =
     { x = x, y = y, z = toFloat 0 }
 
 
-rotateVector : Float -> Point -> Point
+rotateVector : Float -> Vector -> Vector
 rotateVector radAng p =
     -- convertimos el punto a polar
     toPolar ( p.x, p.y )
@@ -179,10 +180,10 @@ emitterIdentity =
 updateAcceleration: List Field -> Particle -> Particle
 updateAcceleration fields particle =
     let
-        repelVector: Field -> Particle -> Point
+        repelVector: Field -> Particle -> Vector
         repelVector f p = {x = f.position.x - p.position.x, y = f.position.y - p.position.y, z = f.position.z - p.position.z }
 
-        dist: Point -> Float
+        dist: Vector -> Float
         dist p = sqrt (p.x^2 + p.y^2)
 
         -- 3ª ley de newton F = (m * m') / d^2
@@ -190,7 +191,7 @@ updateAcceleration fields particle =
         disturbanceAccelerationFactor f p  =
             (toFloat f.size * toFloat p.size ) / (dist (repelVector f p))^2
 
-        vectorMultiplyBy: Point -> Float -> Point
+        vectorMultiplyBy: Vector -> Float -> Vector
         vectorMultiplyBy p k =
            {x = p.x * k, y=p.y * k , z= p.z * k}
 
@@ -205,16 +206,13 @@ updateAcceleration fields particle =
 
         acc refParticle field = vectorMultiplyBy (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
 
-        addVector : Point -> Point -> Point
-        addVector a b =
-          {x = a.x + b.x, y = a.y + b.y, z = a.z + b.z}
 
-        negative: Point -> Point
+        negative: Vector -> Vector
         negative p =
             {x = p.x * -4, y = p.y * -4, z = p.z * -4}
     in
 
-        {particle | acceleration = negative (List.foldl addVector {x = 0, y = 0, z = 0} (List.map ( acc particle ) fields))}
+        {particle | acceleration = negative (List.foldl Vector.add {x = 0, y = 0, z = 0} (List.map ( acc particle ) fields))}
 
 
         -- vectorMultiplyBy repelVect (disturbanceAccelerationFactor fieldItem particle)
@@ -255,21 +253,15 @@ update msg model =
 
                 particlesGroup : Emitter -> List Particle
                 particlesGroup emitter =
-                    -- createParticleFromEmitter seed0 emitter
                     groupParticlesFromEmitter seed0 emitter
 
-                -- [1] Add new particles based on emitters params
                 addParticlesFromEmitters : List Emitter -> List Particle
                 addParticlesFromEmitters emittersList =
                     List.concatMap particlesGroup emittersList
 
-                addVector : Point -> Point -> Point
-                addVector a b =
-                    { x = a.x + b.x, y = a.y + b.y, z = a.z + b.z }
-
                 moveParticle : Particle -> Particle
                 moveParticle particle =
-                    { particle | position = addVector particle.acceleration(addVector particle.position particle.velocity) }
+                    { particle | position = Vector.add particle.acceleration(Vector.add particle.position particle.velocity) }
 
                 -- NEW DATA BEEN ADDED TO DATA FIELD
                 newParticles : List Particle

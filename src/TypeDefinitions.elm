@@ -1,14 +1,11 @@
-module TypeDefinitions exposing (Emitter, Field, Particle, Point, Rgba, rgba)
+module TypeDefinitions exposing (Emitter, Field, Particle, Rgba, rgba)
 
 import Color exposing (Color, fromRgba)
 import Json.Decode exposing (Decoder, field, float, map4)
+import Vector exposing (Vector)
 
 
-type alias Point =
-    { x : Float
-    , y : Float
-    , z : Float
-    }
+
 
 
 
@@ -30,9 +27,9 @@ rgba =
 
 
 type alias Particle =
-    { position : Point
-    , velocity : Point
-    , acceleration : Point
+    { position : Vector
+    , velocity : Vector
+    , acceleration : Vector
     , color : Rgba
     , size : Int
     , gravity : Float
@@ -41,9 +38,9 @@ type alias Particle =
 
 type alias Emitter =
     { id : String
-    , position : Point
+    , position : Vector
     , spread : Float
-    , velocity : Point
+    , velocity : Vector
     , color : List Rgba
     , size : Int
     , density : Int
@@ -60,7 +57,7 @@ type alias Rgba =
 
 type alias Field =
     { id : String
-    , position : Point
+    , position : Vector
     , color : List Rgba
     , size : Int
     , density : Float
