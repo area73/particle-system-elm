@@ -4,8 +4,7 @@
       "id": "Tatooine",
       "position": {
         "x": 550,
-        "y": 300,
-        "z": 50
+        "y": 300
       },
       "color":  [
         {
@@ -29,8 +28,7 @@
       "id": "Endor",
       "position": {
         "x": 250,
-        "y": 400,
-        "z": 50
+        "y": 400
       },
       "color":  [
         {
@@ -56,14 +54,12 @@
       "id": "emitter-01",
       "position": {
         "x": 350,
-        "y": 450,
-        "z": 50
+        "y": 450
       },
       "spread": 10,
       "velocity": {
         "x": 4,
-        "y": -3,
-        "z": 0
+        "y": -3
       },
       "color": [
         {
@@ -78,9 +74,9 @@
     }
  ],
   "particles": [
-    { "position" : { "x" : 0, "y" : 0, "z" : 0}
-    , "velocity" : { "x" : 0, "y" : 0, "z" : 0}
-    , "acceleration" : { "x" : 0, "y" : 0, "z" : 0}
+    { "position" : { "x" : 0, "y" : 0}
+    , "velocity" : { "x" : 0, "y" : 0}
+    , "acceleration" : { "x" : 0, "y" : 0}
     , "color" : { "red" : 0, "green" : 255, "blue" : 0, "alpha" : 1 }
     , "size" : 1
     , "gravity" : 22

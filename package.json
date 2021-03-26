@@ -6,11 +6,13 @@
   "license": "MIT",
   "scripts": {
     "dev": "parcel ./index.html",
-    "build": "parcel build ./index.html"
+    "build": "parcel build ./index.html",
+    "elmLint": "elm-review --fix-all"
   },
   "devDependencies": {
     "elm": "^0.19.1-5",
     "elm-hot": "^1.1.6",
+    "elm-review": "^2.4.6",
     "node-elm-compiler": "^5.0.5"
   },
   "dependencies": {
