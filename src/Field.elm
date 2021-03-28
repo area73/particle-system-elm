@@ -8,6 +8,6 @@ type alias Field =
     { id : String
     , position : Vector
     , color : List Rgba
-    , size : Int
+    , size : Float
     , density : Float
     }

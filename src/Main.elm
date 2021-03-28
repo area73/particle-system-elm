@@ -11,14 +11,15 @@ import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
 import List exposing (concat, foldr, head, length, reverse)
 import Loop
+import PSUtils exposing (randomColor)
 import Random exposing (Seed, float)
 import RandomExtras
 import TypeDefinitions exposing (Rgba)
 import Emitter exposing (Emitter)
 import Field exposing (Field)
 import Particle exposing (Particle)
-import Vector exposing (Vector, add)
-
+import Vector exposing (Vector, add, disturbanceAccelerationFactor)
+import Typeclasses.Classes.Semigroup exposing (..)
 
 
 -- STRUCTS
@@ -55,13 +56,14 @@ type Msg
 
 -- INIT
 
+product: Float -> Float -> Float
+product a b =
+    a * b
+
 randomRotationAngle : Seed -> Float -> Float
 randomRotationAngle seed angle =
-    RandomExtras.byRange seed (-1, 1)
-        |> (\v -> v * angle)
-
-
-
+     RandomExtras.byRange seed (-1, 1)
+        |> product angle
 
 velocityFromEmitter: Seed ->  Emitter -> Vector
 velocityFromEmitter seed {spread , velocity} =
@@ -69,8 +71,7 @@ velocityFromEmitter seed {spread , velocity} =
     |> degrees
     |> flip Vector.rotate velocity
 
-
-
+-- TODO : refactor
 tupleSeedEmitter : Seed -> Emitter -> ( Seed, List Particle ) -> ( Seed, List Particle )
 tupleSeedEmitter seed emitter tuple =
     ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter seed emitter :: Tuple.second tuple)
@@ -79,16 +80,6 @@ tupleSeedEmitter seed emitter tuple =
 groupParticlesFromEmitter : Seed -> Emitter -> List Particle
 groupParticlesFromEmitter seed emitter =
     Loop.for emitter.density (tupleSeedEmitter seed emitter) ( seed, [] ) |> Tuple.second
-
-randomColor: Seed -> Rgba
-randomColor seed0 =
-    let
-        (red, seed1) = Random.step (Random.float 0 1) seed0
-        (green, seed2) = Random.step (Random.float 0 1) seed1
-        (blue, seed3) = Random.step (Random.float 0 1) seed2
-        (alpha, seed4) = Random.step (Random.float 0 1) seed3
-    in
-    { red = red, green = green, blue=blue, alpha=alpha}
 
 createParticleFromEmitter : Seed -> Emitter -> Particle
 createParticleFromEmitter seed emitter =
@@ -102,38 +93,28 @@ createParticleFromEmitter seed emitter =
 
 init : Flags -> ( Model, Cmd Msg )
 init data =
-    {-
-    let
-
-         _ =
-            Debug.log "flags data:" data
-
-    in
-          -}
     ( Success { frameRate = 0, count = 1, data = data }, Cmd.none )
-
 
 updateAcceleration: List Field -> Particle -> Particle
 updateAcceleration fields particle =
     let
-        repelVector: Field -> Particle -> Vector
-        repelVector f p = {x = f.position.x - p.position.x, y = f.position.y - p.position.y }
+        attractionForce: Field -> Vector
+        attractionForce field =
+            let
+               difference = Vector.substract field.position particle.position
+               disturbance =  disturbanceAccelerationFactor field particle
+            in
+            Vector.scalar difference disturbance
 
-
-        -- 3ª ley de newton F = (m * m') / d^2
-        disturbanceAccelerationFactor: Field -> Particle -> Float
-        disturbanceAccelerationFactor f p =
-            (toFloat f.size * toFloat p.size ) / (Vector.distance (repelVector f p))^2
-
-        acc refParticle field = Vector.scalar (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
+        acceleration =
+            List.map attractionForce fields
+                |> List.foldl Vector.add {x = 0, y = 0}
+                |> Vector.opposite
 
     in
-
-        {particle | acceleration = Vector.opposite (List.foldl Vector.add {x = 0, y = 0} (List.map ( acc particle ) fields))}
-
+       {particle | acceleration = acceleration }
 
 -- UPDATE
-
 
 subscriptions _ =
     onAnimationFrameDelta Frame
@@ -141,12 +122,13 @@ subscriptions _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
+{-    let
         frameRate =
             case msg of
                 Frame v ->
                     v
     in
+    -}
     case model of
         Failure err ->
             ( model, Cmd.none )
@@ -154,13 +136,11 @@ update msg model =
         Loading str ->
             ( model, Cmd.none )
 
-        Success m ->
+        Success {frameRate , count, data} ->
             let
+                {emitters, particles, fields} = data
                 seed0 =
-                    Random.initialSeed m.count
-
-{-                _ =
-                    Debug.log "newParticles" newParticles-}
+                    Random.initialSeed count
 
                 particlesGroup : Emitter -> List Particle
                 particlesGroup emitter =
@@ -170,41 +150,32 @@ update msg model =
                 addParticlesFromEmitters emittersList =
                     List.concatMap particlesGroup emittersList
 
+                updatePosition: Particle -> Vector
+                updatePosition particle =
+                    Vector.add particle.position particle.velocity
+                        |> Vector.add particle.acceleration
+
                 moveParticle : Particle -> Particle
                 moveParticle particle =
-                    { particle | position = Vector.add particle.acceleration(Vector.add particle.position particle.velocity) }
+                    { particle | position = updatePosition particle }
 
                 -- NEW DATA BEEN ADDED TO DATA FIELD
                 newParticles : List Particle
                 newParticles =
-                    addParticlesFromEmitters m.data.emitters
-                        ++ m.data.particles
-                        -- limitamos las particulas (luego eliminaremos las que se queden fuera de la vista)
+                    addParticlesFromEmitters emitters
+                        ++ particles
+                        -- we are limiting the num fo particles  later we should remove the ones that goes beyond boundaries
                         |> limitParticles 1000
-                        -- movemos las particulas
-                        |> List.map ((updateAcceleration m.data.fields) >> moveParticle)
-
-                newEmitters : List Emitter
-                newEmitters =
-                    m.data.emitters
-
-                newFields : List Field
-                newFields =
-                    m.data.fields
+                        -- Apply disturbance to particles and update position
+                        |> List.map ((updateAcceleration fields) >> moveParticle)
 
                 newData =
                     { particles = newParticles
-                    , emitters = newEmitters
-                    , fields = newFields
+                    , emitters = emitters
+                    , fields = fields
                     }
             in
-            -- UPDATE DATA
-            -- -----------
-            -- List.map addparticles m.data.emitters m.data.
-            -- move particles
-            --remove unbound
-            --redraw
-            ( Success { m | frameRate = frameRate, count = m.count + 1, data = newData }, Cmd.none )
+            ( Success { frameRate = frameRate, count = count + 1, data = newData }, Cmd.none )
 
 
 --VIEW
@@ -250,11 +221,11 @@ modelToShape model =
 
 convertToCircleField : Field -> Shape
 convertToCircleField field =
-    circle ( field.position.x, field.position.y ) ((field.size |> toFloat) / 2)
+    circle ( field.position.x, field.position.y ) (field.size / 2)
 
 convertToCircleParticle : Particle -> Shape
 convertToCircleParticle particle =
-    circle ( particle.position.x, particle.position.y ) ((particle.size |> toFloat) / 2)
+    circle ( particle.position.x, particle.position.y ) (particle.size / 2)
 
 
 

@@ -7,5 +7,5 @@ type alias Particle =
     , velocity : Vector
     , acceleration : Vector
     , color : Rgba
-    , size : Int
+    , size : Float
     }
