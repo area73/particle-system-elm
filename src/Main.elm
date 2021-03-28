@@ -9,14 +9,17 @@ import Dict
 import Flip exposing (flip)
 import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
-import Json.Decode as Decode exposing (Decoder, array, decodeString, errorToString, field, float, int, list, map, map3, string)
-import Json.Decode.Pipeline exposing (hardcoded, optional, required)
 import List exposing (concat, foldr, head, length, reverse)
 import Loop
-import PseudoRandom exposing (floatSequence)
+import PSUtils exposing (randomColor)
 import Random exposing (Seed, float)
-import TypeDefinitions exposing (Emitter, Field, Particle, Point, Rgba, rgba)
-
+import RandomExtras
+import TypeDefinitions exposing (Rgba)
+import Emitter exposing (Emitter)
+import Field exposing (Field)
+import Particle exposing (Particle)
+import Vector exposing (Vector, add, disturbanceAccelerationFactor)
+import Typeclasses.Classes.Semigroup exposing (..)
 
 
 -- STRUCTS
@@ -24,11 +27,6 @@ import TypeDefinitions exposing (Emitter, Field, Particle, Point, Rgba, rgba)
 
 type alias Config =
     { bgColor : Rgba }
-
-
-config =
-    { bgColor = { red = 0, green = 0, blue = 0, alpha = 1 } }
-
 
 
 -- MODEL
@@ -58,78 +56,22 @@ type Msg
 
 -- INIT
 
+product: Float -> Float -> Float
+product a b =
+    a * b
 
-point : Decoder Point
-point =
-    map3 Point
-        (field "x" Decode.float)
-        (field "y" Decode.float)
-        (field "z" Decode.float)
+randomRotationAngle : Seed -> Float -> Float
+randomRotationAngle seed angle =
+     RandomExtras.byRange seed (-1, 1)
+        |> product angle
 
+velocityFromEmitter: Seed ->  Emitter -> Vector
+velocityFromEmitter seed {spread , velocity} =
+    randomRotationAngle seed spread
+    |> degrees
+    |> flip Vector.rotate velocity
 
-emitterDecoder : Decoder Emitter
-emitterDecoder =
-    Decode.succeed Emitter
-        |> required "id" string
-        |> required "position" point
-        |> required "spread" Decode.float
-        |> required "velocity" point
-        |> required "color" (list rgba)
-        |> required "size" int
-        |> required "density" int
-
-
-lookupData : Flags -> ( Model, Cmd Msg )
-lookupData data =
-    --procesamos los datos
-    -- devolvemos loaded
-    let
-        _ =
-            Debug.log "Parsing data:" data
-    in
-    ( Success
-        { frameRate = 0
-        , count = 1
-        , data = data
-        }
-    , Cmd.none
-    )
-
-
-addAngle : Float -> ( Float, Float ) -> ( Float, Float )
-addAngle delta ( r, ang ) =
-    ( r, ang + delta )
-
-
-toPoint : ( Float, Float ) -> Point
-toPoint ( x, y ) =
-    { x = x, y = y, z = toFloat 0 }
-
-
-rotateVector : Float -> Point -> Point
-rotateVector radAng p =
-    -- convertimos el punto a polar
-    toPolar ( p.x, p.y )
-        -- sumamos el ángulo
-        |> addAngle radAng
-        |> fromPolar
-        |> toPoint
-
-
-
--- convertimos el ángulo a radianes
--- sumamos los 2 ángulos
---lo convertimos a cartesiano
-
-
-generateRandomNum : Seed -> Float -> Float
-generateRandomNum seed angle =
-    Random.step (Random.float -1 1) seed
-        |> Tuple.first
-        |> Debug.log "newParticle"
-        |> (\v -> v * angle)
-
-
+-- TODO : refactor
 tupleSeedEmitter : Seed -> Emitter -> ( Seed, List Particle ) -> ( Seed, List Particle )
 tupleSeedEmitter seed emitter tuple =
     ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter seed emitter :: Tuple.second tuple)
@@ -139,92 +81,40 @@ groupParticlesFromEmitter : Seed -> Emitter -> List Particle
 groupParticlesFromEmitter seed emitter =
     Loop.for emitter.density (tupleSeedEmitter seed emitter) ( seed, [] ) |> Tuple.second
 
-
 createParticleFromEmitter : Seed -> Emitter -> Particle
 createParticleFromEmitter seed emitter =
     { position = emitter.position
-    , velocity = rotateVector (degrees (generateRandomNum seed emitter.spread)) emitter.velocity
-
-    --, velocity = rotateVector emitter.spread emitter.velocity
-    , acceleration = { x = 0, y = 0, z = 0 }
-    , color = { red = 1, green = 0.5, blue = 0.25, alpha = 1 }
-    , size = 1
-    , gravity = 0 -- TODO: remove gravity from particle
+    , velocity = velocityFromEmitter seed emitter
+    , acceleration = { x = 0, y = 0}
+    , color = randomColor seed
+    , size = 3
     }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init data =
-    let
-        _ =
-            Debug.log "flags data:" data
-    in
-    -- ( Loading, parseData data )
-    -- lookupData data
-    -- ( Loading "Loading", Cmd.none )
     ( Success { frameRate = 0, count = 1, data = data }, Cmd.none )
-
-
-emitterIdentity : Emitter
-emitterIdentity =
-    { id = "identity"
-    , position = { x = 0, y = 0, z = 0 }
-    , spread = 0
-    , velocity = { x = 0, y = 0, z = 0 }
-    , color = [ { red = 1, green = 0, blue = 0, alpha = 0.4 } ]
-    , size = 0
-    , density = 1
-    }
 
 updateAcceleration: List Field -> Particle -> Particle
 updateAcceleration fields particle =
     let
-        repelVector: Field -> Particle -> Point
-        repelVector f p = {x = f.position.x - p.position.x, y = f.position.y - p.position.y, z = f.position.z - p.position.z }
+        attractionForce: Field -> Vector
+        attractionForce field =
+            let
+               difference = Vector.substract field.position particle.position
+               disturbance =  disturbanceAccelerationFactor field particle
+            in
+            Vector.scalar difference disturbance
 
-        dist: Point -> Float
-        dist p = sqrt (p.x^2 + p.y^2)
+        acceleration =
+            List.map attractionForce fields
+                |> List.foldl Vector.add {x = 0, y = 0}
+                |> Vector.opposite
 
-        -- 3ª ley de newton F = (m * m') / d^2
-        disturbanceAccelerationFactor: Field -> Particle -> Float
-        disturbanceAccelerationFactor f p  =
-            (toFloat f.size * toFloat p.size ) / (dist (repelVector f p))^2
-
-        vectorMultiplyBy: Point -> Float -> Point
-        vectorMultiplyBy p k =
-           {x = p.x * k, y=p.y * k , z= p.z * k}
-
-        {--
-        internalRecord field refParticle =
-            { originalVector =  repelVector field refParticle
-            , distance = dist (repelVector field refParticle)
-            , perturbance =  disturbanceAccelerationFactor field refParticle
-            , acceleration = vectorMultiplyBy (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
-            }
-        --}
-
-        acc refParticle field = vectorMultiplyBy (repelVector field refParticle) (disturbanceAccelerationFactor field refParticle)
-
-        addVector : Point -> Point -> Point
-        addVector a b =
-          {x = a.x + b.x, y = a.y + b.y, z = a.z + b.z}
-
-        negative: Point -> Point
-        negative p =
-            {x = p.x * -4, y = p.y * -4, z = p.z * -4}
     in
-
-        {particle | acceleration = negative (List.foldl addVector {x = 0, y = 0, z = 0} (List.map ( acc particle ) fields))}
-
-
-        -- vectorMultiplyBy repelVect (disturbanceAccelerationFactor fieldItem particle)
-
-
-
-
+       {particle | acceleration = acceleration }
 
 -- UPDATE
-
 
 subscriptions _ =
     onAnimationFrameDelta Frame
@@ -232,12 +122,13 @@ subscriptions _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
+{-    let
         frameRate =
             case msg of
                 Frame v ->
                     v
     in
+    -}
     case model of
         Failure err ->
             ( model, Cmd.none )
@@ -245,68 +136,48 @@ update msg model =
         Loading str ->
             ( model, Cmd.none )
 
-        Success m ->
+        Success {frameRate , count, data} ->
             let
+                {emitters, particles, fields} = data
                 seed0 =
-                    Random.initialSeed m.count
-
-                _ =
-                    Debug.log "newParticles" newParticles
+                    Random.initialSeed count
 
                 particlesGroup : Emitter -> List Particle
                 particlesGroup emitter =
-                    -- createParticleFromEmitter seed0 emitter
                     groupParticlesFromEmitter seed0 emitter
 
-                -- [1] Add new particles based on emitters params
                 addParticlesFromEmitters : List Emitter -> List Particle
                 addParticlesFromEmitters emittersList =
                     List.concatMap particlesGroup emittersList
 
-                addVector : Point -> Point -> Point
-                addVector a b =
-                    { x = a.x + b.x, y = a.y + b.y, z = a.z + b.z }
+                updatePosition: Particle -> Vector
+                updatePosition particle =
+                    Vector.add particle.position particle.velocity
+                        |> Vector.add particle.acceleration
 
                 moveParticle : Particle -> Particle
                 moveParticle particle =
-                    { particle | position = addVector particle.acceleration(addVector particle.position particle.velocity) }
+                    { particle | position = updatePosition particle }
 
                 -- NEW DATA BEEN ADDED TO DATA FIELD
                 newParticles : List Particle
                 newParticles =
-                    addParticlesFromEmitters m.data.emitters
-                        ++ m.data.particles
-                        -- limitamos las particulas (luego eliminaremos las que se queden fuera de la vista)
+                    addParticlesFromEmitters emitters
+                        ++ particles
+                        -- we are limiting the num fo particles  later we should remove the ones that goes beyond boundaries
                         |> limitParticles 1000
-                        -- movemos las particulas
-                        |> List.map ((updateAcceleration m.data.fields) >> moveParticle)
-
-                newEmitters : List Emitter
-                newEmitters =
-                    m.data.emitters
-
-                newFields : List Field
-                newFields =
-                    m.data.fields
+                        -- Apply disturbance to particles and update position
+                        |> List.map ((updateAcceleration fields) >> moveParticle)
 
                 newData =
                     { particles = newParticles
-                    , emitters = newEmitters
-                    , fields = newFields
+                    , emitters = emitters
+                    , fields = fields
                     }
             in
-            -- UPDATE DATA
-            -- -----------
-            -- List.map addparticles m.data.emitters m.data.
-            -- move particles
-            --remove unbound
-            --redraw
-            ( Success { m | frameRate = frameRate, count = m.count + 1, data = newData }, Cmd.none )
+            ( Success { frameRate = frameRate, count = count + 1, data = newData }, Cmd.none )
 
 
-
--- addparticles: List Emitter -> List Particle -> List Particle
--- addparticles emitters particles =
 --VIEW
 
 
@@ -350,11 +221,11 @@ modelToShape model =
 
 convertToCircleField : Field -> Shape
 convertToCircleField field =
-    circle ( field.position.x, field.position.y ) ((field.size |> toFloat) / 2)
+    circle ( field.position.x, field.position.y ) (field.size / 2)
 
 convertToCircleParticle : Particle -> Shape
 convertToCircleParticle particle =
-    circle ( particle.position.x, particle.position.y ) ((particle.size |> toFloat) / 2)
+    circle ( particle.position.x, particle.position.y ) (particle.size / 2)
 
 
 
