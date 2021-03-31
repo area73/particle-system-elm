@@ -9,11 +9,14 @@ import Dict
 import Flip exposing (flip)
 import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
-import List exposing (concat, foldr, head, length, reverse)
+import List exposing (concat, foldl, foldr, head, length, range, reverse)
 import Loop
 import PSUtils exposing (randomColor)
-import Random exposing (Seed, float)
+import Random exposing (Seed, independentSeed, initialSeed)
+import Random.Extra as Random
+import Random.Float exposing (anyFloat)
 import RandomExtras
+
 import TypeDefinitions exposing (Rgba)
 import Emitter exposing (Emitter)
 import Field exposing (Field)
@@ -72,14 +75,31 @@ velocityFromEmitter seed {spread , velocity} =
     |> flip Vector.rotate velocity
 
 -- TODO : refactor
+
+
 tupleSeedEmitter : Seed -> Emitter -> ( Seed, List Particle ) -> ( Seed, List Particle )
 tupleSeedEmitter seed emitter tuple =
     ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter seed emitter :: Tuple.second tuple)
 
 
+{-
 groupParticlesFromEmitter : Seed -> Emitter -> List Particle
 groupParticlesFromEmitter seed emitter =
     Loop.for emitter.density (tupleSeedEmitter seed emitter) ( seed, [] ) |> Tuple.second
+-}
+groupParticlesFromEmitter : Seed -> Emitter -> List Particle
+groupParticlesFromEmitter seed emitter =
+    let
+        addNum: Int -> Int -> Int
+        addNum a b = a + b
+    in
+    List.range 1 emitter.density
+    |>List.indexedMap (\v -> addNum (RandomExtras.byRangeInt seed (1, 10000)))
+    |>Debug.log "NUMS"
+    |>List.map Random.initialSeed
+
+    |>List.map (flip createParticleFromEmitter emitter)
+
 
 createParticleFromEmitter : Seed -> Emitter -> Particle
 createParticleFromEmitter seed emitter =
@@ -87,7 +107,7 @@ createParticleFromEmitter seed emitter =
     , velocity = velocityFromEmitter seed emitter
     , acceleration = { x = 0, y = 0}
     , color = randomColor seed
-    , size = 3
+    , size = 1
     }
 
 
@@ -146,6 +166,7 @@ update msg model =
                 particlesGroup emitter =
                     groupParticlesFromEmitter seed0 emitter
 
+
                 addParticlesFromEmitters : List Emitter -> List Particle
                 addParticlesFromEmitters emittersList =
                     List.concatMap particlesGroup emittersList
@@ -165,7 +186,7 @@ update msg model =
                     addParticlesFromEmitters emitters
                         ++ particles
                         -- we are limiting the num fo particles  later we should remove the ones that goes beyond boundaries
-                        |> limitParticles 1000
+                        |> limitParticles 5000
                         -- Apply disturbance to particles and update position
                         |> List.map ((updateAcceleration fields) >> moveParticle)
 
@@ -195,7 +216,7 @@ view model =
     , body =
         [ toHtml ( width, height )
             []
-            (shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
+            (shapes [ fill Color.black ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
                :: modelToShape model
             )
         , div [] [ text "this is it" ]
