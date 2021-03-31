@@ -81,12 +81,6 @@ tupleSeedEmitter : Seed -> Emitter -> ( Seed, List Particle ) -> ( Seed, List Pa
 tupleSeedEmitter seed emitter tuple =
     ( Random.initialSeed (length (Tuple.second tuple)), createParticleFromEmitter seed emitter :: Tuple.second tuple)
 
-
-{-
-groupParticlesFromEmitter : Seed -> Emitter -> List Particle
-groupParticlesFromEmitter seed emitter =
-    Loop.for emitter.density (tupleSeedEmitter seed emitter) ( seed, [] ) |> Tuple.second
--}
 groupParticlesFromEmitter : Seed -> Emitter -> List Particle
 groupParticlesFromEmitter seed emitter =
     let
