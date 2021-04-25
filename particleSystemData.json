@@ -21,14 +21,14 @@
         }
       ],
       "size": 40,
-      "density": 1000
+      "density": 100
     },
 
     {
       "id": "Endor",
       "position": {
         "x": 250,
-        "y": 400
+        "y": 300
       },
       "color":  [
         {
@@ -54,12 +54,12 @@
       "id": "emitter-01",
       "position": {
         "x": 350,
-        "y": 450
+        "y": 550
       },
-      "spread": 10,
+      "spread": 80,
       "velocity": {
-        "x": -2,
-        "y": -1
+        "x": -1,
+        "y": -4
       },
       "color": [
         {
@@ -70,7 +70,7 @@
         }
       ],
       "size": 4,
-      "density": 4
+      "density": 14
     }
  ],
   "particles": []

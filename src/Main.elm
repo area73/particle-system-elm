@@ -9,7 +9,7 @@ import Dict
 import Flip exposing (flip)
 import Html exposing (Html, div, h1, text)
 import Http exposing (Error(..), Expect, expectStringResponse)
-import List exposing (concat, foldl, foldr, head, length, range, reverse)
+import List exposing (concat, filter, foldl, foldr, head, length, range, reverse)
 import Loop
 import PSUtils exposing (randomColor)
 import Random exposing (Seed, independentSeed, initialSeed)
@@ -101,7 +101,7 @@ createParticleFromEmitter seed emitter =
     , velocity = velocityFromEmitter seed emitter
     , acceleration = { x = 0, y = 0}
     , color = randomColor seed
-    , size = 1
+    , size = 6
     }
 
 
@@ -136,13 +136,6 @@ subscriptions _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-{-    let
-        frameRate =
-            case msg of
-                Frame v ->
-                    v
-    in
-    -}
     case model of
         Failure err ->
             ( model, Cmd.none )
@@ -179,6 +172,8 @@ update msg model =
                 newParticles =
                     addParticlesFromEmitters emitters
                         ++ particles
+                        -- remove particles outside boundaries
+                        |> removeOutboundParticles {x=1200 , y=1200}
                         -- we are limiting the num fo particles  later we should remove the ones that goes beyond boundaries
                         |> limitParticles 5000
                         -- Apply disturbance to particles and update position
@@ -194,6 +189,10 @@ update msg model =
 
 
 --VIEW
+
+partNum: List Particle -> Int
+partNum particleList =
+    length particleList
 
 
 width =
@@ -216,6 +215,15 @@ view model =
         , div [] [ text "this is it" ]
         ]
     }
+
+
+isInsideBoundary: Vector -> Particle -> Bool
+isInsideBoundary limitVector particle =
+    limitVector.x >= particle.position.x && limitVector.y >= particle.position.y
+
+removeOutboundParticles: Vector -> List Particle -> List Particle
+removeOutboundParticles boundaryLimit particles =
+    filter (isInsideBoundary boundaryLimit) particles
 
 limitParticles: Int -> List Particle -> List Particle
 limitParticles num list =
